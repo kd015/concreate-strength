@@ -1,80 +1,249 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Concreate Strength Prediction</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concrete Strength Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 50px;
-        }
-        .form-container {
-            max-width: 500px;
-            margin: auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 10px;
-        }
-        .form-container input {
-            width: 100%;
-            padding: 10px;
-            margin: 5px 0 20px 0;
-            display: inline-block;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
-        .form-container input[type="submit"] {
-            background-color: #24a03fff;
-            color: white;
-            border: none;
-        }
-        .form-container input[type="submit"]:hover {
-            background-color: #45a049;
-        }
-        .result {
-            font-size: 1.5em;
-            color: #8f5615ff;
-            text-align: center;
-            margin-top: 20px;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f4f9; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .main-container { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1400px; width: 100%; }
+        .column { display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 320px; }
+        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        h2 { color: #0056b3; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; font-size: 1.2em; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .predict-btn { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        .result-box { border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-top: 20px; background-color: #f9f9f9; }
+        .result-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .result-item:last-child { border-bottom: none; }
+        .result-item strong { color: #0056b3; }
+        .error { color: #dc3545; font-weight: bold; margin-top: 15px; }
+        input:not(:placeholder-shown):invalid { border-color: #dc3545; }
+        .age-slider-group { display: flex; align-items: center; gap: 10px; }
+        .age-slider-group input[type="range"] { flex: 1; }
+        .age-slider-group input[type="number"] { width: 70px; }
+        .chart-container { position: relative; height:280px; }
+        .chart-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #aaa; font-size: 0.9em; text-align: center; }
+        .info-section { margin-top: 20px; max-width: 1400px; width: 100%; }
+        .info-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .info-table th, .info-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        .info-table th { background-color: #e9ecef; font-weight: 600; }
+        .info-table tr:nth-child(even) { background-color: #fafafa; }
+        .footer { text-align: center; margin-top: 40px; color: #777; font-size: 0.9em; }
+        .shap-legend { font-size: 0.8em; color: #666; text-align: center; margin-top: 10px; }
+        .shap-legend span { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: middle; }
+        .shap-blue { background-color: #36A2EB; }
+        .shap-red { background-color: #FF6384; }
     </style>
 </head>
 <body>
-    <div class="form-container">
-        <h2>Concreate Strength Prediction</h2>
-        <form action="/predict" method="post">
-            <label for="Cement">Cement: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" name="Cement" required>
+    <div class="main-container">
+        <div class="column">
+            <div class="card">
+                <h2>Concrete Strength Prediction</h2>
+                <form action="/predict" method="post">
+                    <div class="input-group"><label for="model_type">Select Model</label>
+                        <select id="model_type" name="model_type" required>
+                            <option value="dt" {% if result and result.form_data.model_type == 'dt' %}selected{% endif %}>Decision Tree</option>
+                            <option value="rf" {% if result and result.form_data.model_type == 'rf' %}selected{% endif %}>Random Forest</option>
+                            <option value="xgb" {% if result and result.form_data.model_type == 'xgb' %}selected{% endif %}>XGBoost</option>
+                        </select>
+                    </div>
+                    <div class="input-group"><label for = "tuning_method">Select Hyperparameter Tunning</label>
+                        <select id="tuning_method" name = "tuning_method" required>
+                            <option value="standard" {% if result and result.form_data.tuning_method == 'standard' %}selected{% endif %}>Standard</option>
+                            <option value="tuned" {% if result and result.form_data.tuning_method == 'tuned' %}selected{% endif %}>GridSearchCV</option>
+                            <option value="pso" {% if result and result.form_data.tuning_method == 'pso' %}selected{% endif %}>PSO</option>
+                        </select>
+                    </div>
+
+
+                    <div class="input-group"><label for="Cement">Cement (kg/m³)</label>
+                        <input type="number" step="any" name="Cement" min="100" max="550" value="{{ result.form_data.get('Cement') if result else '' }}" placeholder="e.g., 281.1" required>
+                    </div>
+                    <div class="input-group"><label for="Slag">Slag (kg/m³)</label>
+                        <input type="number" step="any" name="Slag" min="0" max="360" value="{{ result.form_data.get('Slag') if result else '' }}" placeholder="e.g., 21.2" required>
+                    </div>
+                    <div class="input-group"><label for="FlyAsh">Fly Ash (kg/m³)</label>
+                        <input type="number" step="any" name="FlyAsh" min="0" max="200" value="{{ result.form_data.get('FlyAsh') if result else '' }}" placeholder="e.g., 0" required>
+                    </div>
+                    <div class="input-group"><label for="Water">Water (kg/m³)</label>
+                        <input type="number" step="any" name="Water" min="120" max="240" value="{{ result.form_data.get('Water') if result else '' }}" placeholder="e.g., 192" required>
+                    </div>
+                    <div class="input-group"><label for="Superplasticizer">Super Plasticizer (kg/m³)</label>
+                        <input type="number" step="any" name="Superplasticizer" min="0" max="32" value="{{ result.form_data.get('Superplasticizer') if result else '' }}" placeholder="e.g., 0" required>
+                    </div>
+                    <div class="input-group"><label for="CoarseAggregate">Coarse Aggregate (kg/m³)</label>
+                        <input type="number" step="any" name="CoarseAggregate" min="800" max="1150" value="{{ result.form_data.get('CoarseAggregate') if result else '' }}" placeholder="e.g., 1047" required>
+                    </div>
+                    <div class="input-group"><label for="FineAggregate">Fine Aggregate (kg/m³)</label>
+                        <input type="number" step="any" name="FineAggregate" min="590" max="1000" value="{{ result.form_data.get('FineAggregate') if result else '' }}" placeholder="e.g., 773" required>
+                    </div>
+                    <div class="input-group"><label for="Age">Age (days)</label>
+                        <div class="age-slider-group"><input type="range" id="ageSlider" min="1" max="365" value="{{ result.form_data.get('Age') if result else '28' }}">
+                        <input type="number" step="1" name="Age" id="ageInput" min="1" max="365" value="{{ result.form_data.get('Age') if result else '28' }}" required>
+                    </div>
+                    </div>
+                    <input type="submit" value="Predict" class="predict-btn">
+                </form>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="card">
+                <h2>Prediction Results</h2>
+                {% if result %}
+                <div class="result-box">
+                    <div class="result-item"><span>Predicted Strength:</span><strong>{{ result.prediction_strength }}</strong></div>
+                    <div class="result-item"><span>Model R² Score:</span><strong>{{ result.r2_score }}</strong></div>
+                    <div class="result-item"><span>Model MSE:</span><strong>{{ result.mse }}</strong></div>
+                    <div class="result-item"><span>Prediction Runtime:</span><strong>{{ result.runtime }}</strong></div>
+                </div>
+                {% else %}
+                <p>Results will be displayed here after prediction.</p>
+                {% endif %}
+                {% if error %}<p class="error">{{ error }}</p>{% endif %}
+            </div>
+            <div class="card">
+                <h2>Mix Composition</h2>
+                <div class="chart-container">
+                    <canvas id="compositionChart"></canvas>
+                    <p id="compositionPlaceholder" class="chart-placeholder">Chart will appear after a prediction is made.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="column">
+             <div class="card">
+                <h2>Feature Importance</h2>
+                <div class="chart-container">
+                    <canvas id="importanceChart"></canvas>
+                    <p id="importancePlaceholder" class="chart-placeholder">Chart will appear after a prediction is made.</p>
+                </div>
+            </div>
             
-            <label for="Slag">Slag: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" step="0.01" name="Slag" required>
-            
-            <label for="FlyAsh">Fly Ash: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" name="FlyAsh" required>
-            
-            <label for="Water">Water: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" name="Water" required>
-            
-            <label for="Superplasticizer">Super Plasticizer: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" step="0.01" name="Superplasticizer" required>
-
-            <label for="CoarseAgg">Coarse Aggregate: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" name="CoarseAgg" required>
-
-            <label for="FineAgg">Fine Aggregate: (kg/m<Sup>3</Sup>)</label>
-            <input type="number" name="FineAgg" required>
-
-            <label for="Age">Age: (days)</label>
-            <input type="number" name="Age" required>
-
-
-
-            
-            <input type="submit" value="Predict">
-        </form>
-        {% if prediction_text %}
-        <div class="result">{{ prediction_text }}</div>
-        {% endif %}
+            <div class="card">
+                <h2>Prediction Explanation</h2>
+                <div class="chart-container">
+                    <canvas id="shapChart"></canvas>
+                    <p id="shapPlaceholder" class="chart-placeholder">Chart will appear after a prediction is made.</p>
+                </div>
+                <div class="shap-legend">
+                    <span class="shap-blue"></span> Pushes Prediction Higher &nbsp;&nbsp;
+                    <span class="shap-red"></span> Pushes Prediction Lower
+                </div>
+            </div>
+        </div>
     </div>
+    
+    <!-- INFO SECTIONS -->
+    <div class="info-section">
+        <div class="card">
+            <h2>About The Calculator</h2>
+            <p>This tool predicts the compressive strength of concrete, a critical measure of its quality and durability. The prediction is based on the quantity of its core components and its age.</p>
+            <p>The underlying technology uses several machine learning models trained on a comprehensive dataset of concrete samples. You can compare the performance of standard models against versions that have been optimized with advanced hyperparameter tuning techniques.</p>
+        </div>
+    </div>
+    <div class="info-section">
+        <div class="card">
+            <h2>Recommended Input Ranges (IS Code Guidelines)</h2>
+            <p>The following ranges are based on general principles from Indian Standards for concrete mix design (like <strong>IS 456</strong> & <strong>IS 10262</strong>) and cover the vast majority of common and high-strength concrete mixes.</p>
+            <table class="info-table">
+                <thead><tr><th>Material</th><th>Range</th></tr></thead>
+                <tbody>
+                    <tr><td>Cement</td><td>100 - 550 kg/m³</td></tr>
+                    <tr><td>Slag</td><td>0 - 360 kg/m³</td></tr>
+                    <tr><td>Fly Ash</td><td>0 - 200 kg/m³</td></tr>
+                    <tr><td>Water</td><td>120 - 240 kg/m³</td></tr>
+                    <tr><td>Super Plasticizer</td><td>0 - 32 kg/m³</td></tr>
+                    <tr><td>Coarse Aggregate</td><td>800 - 1150 kg/m³</td></tr>
+                    <tr><td>Fine Aggregate</td><td>590 - 1000 kg/m³</td></tr>
+                    <tr><td>Age</td><td>1 - 365 days</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="footer">
+        <p>&copy; 2025  Department of Civil Engineering, REC Ambedkar Nagar. All Rights Reserved.</p>
+    </div>
+
+    <script>
+        const ageSlider = document.getElementById('ageSlider');
+        const ageInput = document.getElementById('ageInput');
+        ageSlider.addEventListener('input', () => ageInput.value = ageSlider.value);
+        ageInput.addEventListener('input', () => ageSlider.value = ageInput.value);
+
+        const resultData = {{ result | tojson | safe if result else 'null' }};
+        
+        if (resultData && resultData.form_data) {
+            document.getElementById('compositionPlaceholder').style.display = 'none';
+            document.getElementById('importancePlaceholder').style.display = 'none';
+            document.getElementById('shapPlaceholder').style.display = 'none';
+
+   
+            const ctxComposition = document.getElementById('compositionChart').getContext('2d');
+            const formData = resultData.form_data;
+            const compositionData = {
+                labels: ['Cement', 'Slag', 'FlyAsh', 'Water', 'Super Plasticizer', 'Coarse Aggregate', 'Fine Aggregate'],
+                datasets: [{
+                    label: 'Mix Composition (kg/m³)',
+                    data: [
+                        formData.Cement, formData.Slag, formData.FlyAsh, formData.Water,
+                        formData.Superplasticizer, formData.CoarseAggregate, formData.FineAggregate
+                    ],
+                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF'],
+                }]
+            };
+            new Chart(ctxComposition, { type: 'doughnut', data: compositionData, options: { maintainAspectRatio: false, responsive: true }});
+
+     
+            if (resultData.feature_importances) {
+                const ctxImportance = document.getElementById('importanceChart').getContext('2d');
+                const importances = resultData.feature_importances;
+                const sortedFeatures = Object.entries(importances).sort(([,a],[,b]) => b-a);
+                const importanceLabels = sortedFeatures.map(item => item[0]);
+                const importanceData = sortedFeatures.map(item => item[1]);
+                new Chart(ctxImportance, {
+                    type: 'bar',
+                    data: {
+                        labels: importanceLabels,
+                        datasets: [{ label: 'Relative Importance', data: importanceData, backgroundColor: '#36A2EB' }]
+                    },
+                    options: { indexAxis: 'y', maintainAspectRatio: false, responsive: true, plugins: { legend: { display: false } }}
+                });
+            }
+            
+
+            if (resultData.shap_values) {
+                const ctxShap = document.getElementById('shapChart').getContext('2d');
+                const shapValues = resultData.shap_values;
+                const sortedShap = Object.entries(shapValues).sort(([,a],[,b]) => Math.abs(b) - Math.abs(a));
+                const shapLabels = sortedShap.map(item => item[0]);
+                const shapData = sortedShap.map(item => item[1]);
+                const shapColors = shapData.map(value => value >= 0 ? '#36A2EB' : '#FF6384'); 
+
+                new Chart(ctxShap, {
+                    type: 'bar',
+                    data: {
+                        labels: shapLabels,
+                        datasets: [{
+                            label: 'SHAP Value (Impact on Prediction)',
+                            data: shapData,
+                            backgroundColor: shapColors
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+        }
+    </script>
 </body>
 </html>
+
